@@ -1,5 +1,6 @@
 #!/usr/bin/env julia
 # SatComm ex2
+using DelimitedFiles
 using Makie
 
 const e = Base.MathConstants.e
@@ -74,7 +75,8 @@ function calcAttenuation(percentage_of_time::Array{Float64},
     Re = 8500 # km
 
     # Step 1
-    hr = hs + 0.36 # km
+    h0 = initP839(φ)
+    hr = h0 + 0.36 # km
 
     # Step 2
     for r_ in regions
@@ -452,6 +454,20 @@ function initESD()
     σ[0.01] = 10
     σ[0.001] = 15
     return σ
+end
+
+# Isotherm height
+function initP839(lat::Float64)
+    lats = readdlm(String(@__DIR__)*"/ITU-R/Lat.txt")
+    h0s = readdlm(String(@__DIR__)*"/ITU-R/h0.txt")
+    for i=1:size(lats)[1]
+        for j=1:size(lats)[2]
+            if lats[i,j] == lat
+                return h0s[i,j]
+            end
+        end
+    end
+    return -1
 end
 
 init()

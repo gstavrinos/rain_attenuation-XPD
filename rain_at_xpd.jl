@@ -40,7 +40,12 @@ function init()
     # ----- Input 6 -----
     pol_tilt_angle = 30.0 # degrees
 
-    φ = -60.0 # region of group4 (Yes, we are using a floating Earth station!)
+    # regions of group4 (Yes, we are using some floating Earth stations!)
+    φ = Dict{Char,Array{Float64}}()
+    φ['A'] = [-40.5, 105.0]
+    φ['D'] = [-40.5, 75.0]
+    φ['F'] = [-34.5, 45.0]
+    φ['K'] = [-30.0, 36.0]
 
     Ap_ang1 = calcAttenuation(percentage_of_time, regions_for_group4, p837, index_of_interest, frequency_range, elevation_angle1, pol_tilt_angle, es_height, φ, link_availability)
 
@@ -68,18 +73,18 @@ function calcAttenuation(percentage_of_time::Array{Float64},
                 θ::Float64,
                 τ::Float64,
                 hs::Float64,
-                φ::Float64,
+                φ::Dict{Char, Array{Float64}},
                 link_availability::Float64)
 
     Ap = Dict{Char, Array{Float64}}()
     Re = 8500 # km
 
-    # Step 1
-    h0 = initP839(φ)
-    hr = h0 + 0.36 # km
-
-    # Step 2
     for r_ in regions
+        # Step 1
+        h0 = initP839(φ[r_])
+        hr = h0 + 0.36 # km
+
+        # Step 2
         if (hr - hs) > 0
             Ls = 0
             if θ >= 5
@@ -114,8 +119,8 @@ function calcAttenuation(percentage_of_time::Array{Float64},
                     Lr = (hr - hs) / sind(θ)
                 end
                 χ = 0
-                if abs(φ) < 36
-                    χ = 36 - abs(φ)
+                if abs(φ[r_][1]) < 36
+                    χ = 36 - abs(φ[r_][1])
                 end
                 v = 1 / (1 + sqrt(sind(θ)) * (31 * (1 - e^(-θ / (1+χ)) * sqrt(Lr*γR) / f^2 - 0.45)))
 
@@ -128,10 +133,10 @@ function calcAttenuation(percentage_of_time::Array{Float64},
                 # Step 10
                 β = 0
                 p = 100 - link_availability
-                if p < 1 && abs(φ) < 36 && θ >= 25
-                    β = -0.005 * (abs(φ) - 36)
-                elseif p < 1 && abs(φ) < 36
-                    β = -0.005 * (abs(φ) - 36) + 1.8 - 4.25 * sind(θ)
+                if p < 1 && abs(φ[r_][1]) < 36 && θ >= 25
+                    β = -0.005 * (abs(φ[r_][1]) - 36)
+                elseif p < 1 && abs(φ[r_][1]) < 36
+                    β = -0.005 * (abs(φ[r_][1]) - 36) + 1.8 - 4.25 * sind(θ)
                 end
                 Ap_ = A * (p / 0.01)^(-(0.655 + 0.033 * log(p) - 0.045 * log(A) - β * (1 - p) * sind(θ)))
                 if haskey(Ap, r_)
@@ -254,7 +259,6 @@ function calcXPD(Ap::Dict{Char, Array{Float64}}, τ::Float64, frequency_range::A
             XPD2 = XPD1 - 20 * log10((f2 * sqrt(1 - 0.484 * (1 + cosd(4 * τ)))) / (f1 * sqrt(1 - 0.484 * (1 + cosd(4 * τ)))))
             prepend!(XPD[region], XPD2)
         end
-        println(XPD[region])
     end
     return XPD
 end
@@ -376,8 +380,8 @@ function initP838(frequency::Int64, θ::Float64, τ::Float64)
     αv[28] = 0.9277
     kv[29] = 0.2124
     αv[29] = 0.9203
-    αv[30] = 0.2291
-    kv[30] = 0.9129
+    kv[30] = 0.2291
+    αv[30] = 0.9129
 
     kh[1] = 0.0000259
     αh[1] = 0.9691
@@ -437,8 +441,8 @@ function initP838(frequency::Int64, θ::Float64, τ::Float64)
     αh[28] = 0.9679
     kh[29] = 0.2224
     αh[29] = 0.9580
-    αh[30] = 0.2403
-    kh[30] = 0.9485
+    kh[30] = 0.2403
+    αh[30] = 0.9485
 
     k = (kh[frequency] + kv[frequency] + (kh[frequency] - kv[frequency]) * cosd(θ)^2 * cosd(2 * τ)) / 2
     α = (kh[frequency] * αh[frequency] + kv[frequency] * αv[frequency] + (kh[frequency] * αh[frequency] - kv[frequency] * αv[frequency]) * cosd(θ)^2 * cosd(2 * τ)) / (2 * k)
@@ -457,14 +461,23 @@ function initESD()
 end
 
 # Isotherm height
-function initP839(lat::Float64)
+function initP839(latlon::Array{Float64})
     lats = readdlm(String(@__DIR__)*"/ITU-R/Lat.txt")
+    lons = readdlm(String(@__DIR__)*"/ITU-R/Lon.txt")
     h0s = readdlm(String(@__DIR__)*"/ITU-R/h0.txt")
+    is = []
+    js = []
     for i=1:size(lats)[1]
         for j=1:size(lats)[2]
-            if lats[i,j] == lat
-                return h0s[i,j]
+            if lats[i,j] == latlon[1]
+                append!(is, i)
+                append!(js, j)
             end
+        end
+    end
+    for i=1:length(is)
+        if lons[is[i],js[i]] == latlon[2]
+            return h0s[is[i],js[i]]
         end
     end
     return -1
